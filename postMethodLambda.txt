@@ -1,0 +1,67 @@
+import json
+import boto3
+import uuid
+from datetime import datetime
+from datetime import timezone
+def lambda_handler(event, context):
+    # TODO implement
+    print('events printing')
+    print(event)
+    print("data copies print")
+    print(event['datacopy'])
+    datadb = event['datacopy']
+    print("dbs")
+    current_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    dynamodb = boto3.resource('dynamodb')
+    event_client = boto3.client('events')
+    lambda_client = boto3.client('lambda')
+    table = dynamodb.Table('test')
+    #UpgradeDBVersionEventId = "MKP"+str(uuid.uuid1())[:4]
+    for dbs in datadb:
+        print(dbs["database"])
+        dbs_name = dbs["database"]
+        dbs_engine = dbs["engine"]
+        dbs_eng_vers = dbs["engineVersion"]
+        dbs_update_vers = dbs["updateVersion"]
+        dbs_update_schedule = dbs["scheduleDate"]
+        table.put_item ( 
+            Item = {
+                "dbName": dbs_name,
+                "dbEngine": dbs_engine,
+                "dbEngVersion":dbs_eng_vers,
+                "dbEngineUpdateVersion" : dbs_update_vers,
+                "dbUpdateSchedule": dbs_update_schedule,
+                "versionSubmitDate": current_date
+            }
+        )
+        UpgradeDBVersionEventId = "dbUpgradeCronRule12_"+str(uuid.uuid1())[:4]
+        dbs_update_schedule = datetime.fromisoformat(dbs_update_schedule)
+        schedule_cron_exp = f"cron({dbs_update_schedule.minute} {dbs_update_schedule.hour} {dbs_update_schedule.day} {dbs_update_schedule.month} ? {dbs_update_schedule.year})"
+        create_rule = event_client.put_rule(
+            Name = dbs_name,
+            #Name = int(resp["UpgradeDBVersionEvent"]["id_counter"])
+            ScheduleExpression = schedule_cron_exp,
+            State = "ENABLED",
+            Description='Schedule to upgrade the db',
+        )
+        print(schedule_cron_exp)
+        add_targets = event_client.put_targets(
+            Rule = dbs_name,
+            Targets=[
+                {
+                    "Id": "sTest",
+                    "Arn": 'arn:aws:lambda:ap-south-1:198095598917:function:sTest',
+                }
+            ]
+        )
+        rslt = lambda_client.add_permission(
+            FunctionName='arn:aws:lambda:ap-south-1:198095598917:function:sTest',
+            StatementId=UpgradeDBVersionEventId,
+            Action='lambda:InvokeFunction',
+            Principal='events.amazonaws.com',
+            SourceArn= create_rule["RuleArn"]
+        )
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Hello from Lambda!')
+    }

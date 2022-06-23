@@ -1,0 +1,26 @@
+import json
+import boto3
+
+def lambda_handler(event, context):
+    rds_client = boto3.client("rds")
+    dynamodb_client = boto3.resource("dynamodb")
+    table = dynamodb_client.Table("test")
+    table_scan = table.scan()
+    table_items = table_scan['Items']
+    print("updatedb==============================")
+    for dbs in table_items:
+        dbs_name = dbs["dbName"]
+        dbs_engine = dbs["dbEngine"]
+        dbs_eng_vers = dbs["dbEngVersion"]
+        dbs_update_vers = dbs["dbEngineUpdateVersion"]
+        
+        # rds_client.create_db_snapshot(
+        #     DBSnapshotIdentifier= dbs_name,   
+        #     DBInstanceIdentifier= dbs_name,
+        # )
+        
+        response = rds_client.modify_db_instance(
+            DBInstanceIdentifier = dbs_name,
+            ApplyImmediately = True,
+            EngineVersion = dbs_update_vers,
+        )
